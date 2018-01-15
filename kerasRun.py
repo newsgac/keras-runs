@@ -1,12 +1,13 @@
 #!/usr/bin/python3
 """
     kerasRun.py: apply keras to newsgac data
-    usage: kerasRun.py < file
+    usage: kerasRun.py -T trainFile [ -t testFile ]
     note: input line format: label token1 token2 ...
     source: https://github.com/keras-team/keras/blob/master/examples/reuters_mlp.py
     20171215 erikt(at)xs4all.nl
 """
 
+import getopt
 import sys
 import numpy as np
 import keras
@@ -16,6 +17,7 @@ from keras.layers import Dense, Dropout, Activation
 from keras.preprocessing.text import Tokenizer
 
 COMMAND = sys.argv[0]
+USAGE = "usage: "+COMMAND+" -T trainFile [ -t testFile ]"
 FOLDS = 10
 MAXWORDS = 10000
 BATCHSIZE = 32
@@ -42,14 +44,17 @@ def makeNumeric(listIn):
             listOut.append(myDict[listIn[i]])
     return(listOut)
 
-def readData():
+def readData(inFileName):
     text = []
     classes = []
-    for line in sys.stdin:
+    try: inFile = open(inFileName,"r")
+    except: sys.exit(COMMAND+": cannot read file "+inFileName)
+    for line in inFile:
         fields = line.split()
         c = fields.pop(0)
         text.append(fields)
         classes.append(c)
+    inFile.close()
     return({"text":makeNumeric(text), "classes":makeNumeric(classes)})
 
 def predict(xTest,yTest):
@@ -91,7 +96,26 @@ def runExperiment(xTrain,yTrain,xTest,yTest):
                         validation_split=VALIDATIONSPLIT)
     score = model.evaluate(xTest, yTest,
                            batch_size=BATCHSIZE, verbose=VERBOSE)
+    p = model.predict(xTest,batch_size=BATCHSIZE,verbose=VERBOSE)
+    for i in range(0,len(p)):
+        maxJ = -1
+        maxP = 0
+        for j in range(0,len(p[i])):
+            if p[i][j] > maxP:
+                maxP = p[i][j]
+                maxJ = j
+        maxYJ = -1
+        maxY = 0
+        for j in range(0,len(yTest[i])):
+            if yTest[i][j] > maxY:
+                maxY = yTest[i][j]
+                maxYJ = j
+        print(str(maxYJ)+" "+str(maxJ))
     return(score[1])
+
+def singleRun(trainText,trainClasses,testText,testClasses):
+    score = runExperiment(np.array(trainText),np.array(trainClasses),np.array(testText),np.array(testClasses))
+    return(score)
 
 def run10cv(text,classes):
     results = []
@@ -112,14 +136,34 @@ def run10cv(text,classes):
     total = 0.0
     for i in range(0,FOLDS): total += results[i]
     return(total/float(FOLDS))
-    
+
+def processOpts(argv):
+    argv.pop(0)
+    try: options = getopt.getopt(argv,"T:t:",[])
+    except: sys.exit(USAGE)
+    trainFile = ""
+    testFile = ""
+    for option in options[0]:
+        if option[0] == "-T": trainFile = option[1]
+        elif option[0] == "-t": testFile = option[1]
+    if trainFile == "": sys.exit(USAGE)
+    return(trainFile,testFile)
+
 def main(argv):
-    readDataResults = readData()
-    text = readDataResults["text"]
-    classes = readDataResults["classes"]
-    averageScore = run10cv(text,classes)
-    print("Average: ",averageScore)
-    sys.exit(0)
+    trainFile, testFile = processOpts(argv)
+    trainData = readData(trainFile)
+    trainText = trainData["text"]
+    trainClasses = trainData["classes"]
+    if testFile == "":
+        averageScore = run10cv(trainText,trainClasses)
+        print("Average: ",averageScore)
+    else: 
+        testData = readData(testFile)
+        testText = testData["text"]
+        testClasses = testData["classes"]
+        score = singleRun(trainText,trainClasses,testText,testClasses)
+        print("Score: ",score)
+    return(0)
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv))
