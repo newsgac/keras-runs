@@ -8,9 +8,10 @@
 """
 
 import getopt
-import sys
-import numpy as np
 import keras
+import numpy as np
+import re
+import sys
 from keras.datasets import reuters
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation
@@ -39,8 +40,13 @@ def makeNumeric(listIn):
                 listOut[i].append(myDict[listIn[i][j]])
         else:
             if not listIn[i] in myDict:
-                lastElement += 1
-                myDict[listIn[i]] = lastElement
+                if re.match("__label__\d+",listIn[i]):
+                   nbr = int(re.sub("__label__","",listIn[i]))
+                   myDict[listIn[i]] = nbr
+                   if nbr >= lastElement: lastElement = nbr+1
+                else:
+                   lastElement += 1
+                   myDict[listIn[i]] = lastElement
             listOut.append(myDict[listIn[i]])
     return(listOut)
 
@@ -55,7 +61,7 @@ def readData(inFileName):
         text.append(fields)
         classes.append(c)
     inFile.close()
-    return({"text":makeNumeric(text), "classes":makeNumeric(classes)})
+    return({"text":text, "classes":classes})
 
 def predict(xTest,yTest):
     predictions = model.predict(xTest,batch_size=BATCHSIZE,verbose=VERBOSE)
@@ -155,12 +161,22 @@ def main(argv):
     trainText = trainData["text"]
     trainClasses = trainData["classes"]
     if testFile == "":
+        trainText = makeNumeric(trainText)
+        trainClasses = makeNumeric(trainClasses)
         averageScore = run10cv(trainText,trainClasses)
         print("Average: ",averageScore)
     else: 
         testData = readData(testFile)
-        testText = testData["text"]
-        testClasses = testData["classes"]
+        combinedList = list(trainText)
+        combinedList.extend(testData["text"])
+        numericData = makeNumeric(combinedList)
+        testText = numericData[len(trainText):]
+        trainText = numericData[:len(trainText)]
+        combinedList = list(trainClasses)
+        combinedList.extend(testData["classes"])
+        numericData = makeNumeric(combinedList)
+        testClasses = numericData[len(trainClasses):]
+        trainClasses = numericData[:len(trainClasses)]
         score = singleRun(trainText,trainClasses,testText,testClasses)
         print("Score: ",score)
     return(0)
