@@ -44,6 +44,9 @@ def makeNumeric(listIn):
                    nbr = int(re.sub("__label__","",listIn[i]))
                    myDict[listIn[i]] = nbr
                    if nbr >= lastElement: lastElement = nbr+1
+                elif re.match("__label__None",listIn[i]):
+                   nbr = 0
+                   myDict[listIn[i]] = nbr
                 else:
                    lastElement += 1
                    myDict[listIn[i]] = lastElement
