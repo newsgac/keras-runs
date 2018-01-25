@@ -40,7 +40,7 @@ def makeNumeric(listIn):
                 listOut[i].append(myDict[listIn[i][j]])
         else:
             if not listIn[i] in myDict:
-                if re.match("^__label__[0-9+]$",listIn[i]):
+                if re.match("^__label__[0-9+]+$",listIn[i]):
                    nbr = re.sub("__label__","",listIn[i])
                    nbr = re.sub("\+.*$","",nbr)
                    nbr = int(nbr)
