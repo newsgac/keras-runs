@@ -9,10 +9,13 @@ from sklearn.naive_bayes import BernoulliNB, GaussianNB, MultinomialNB
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.model_selection import cross_val_predict
+from sklearn.model_selection import KFold
 from sklearn import metrics
 
 COMMAND = sys.argv.pop(0)
-CVSIZE = 10
+RANDOMSTATE = 42
+FOLDS = 10
+CV = KFold(n_splits=FOLDS,shuffle=True,random_state=RANDOMSTATE)
 USAGE = "usage: "+COMMAND+" data-file"
 ANALYZER = "word"
 MINDF = 0.01
@@ -71,8 +74,8 @@ def naiveBayesTest(model,examples,labels):
     predictedLabels = model.predict(examples)
     return(metrics.accuracy_score(labels,predictedLabels),predictedLabels)
 
-def naiveBayes10cv(examples,labels,cvSize):
-    predictedLabels = cross_val_predict(NBMODEL,examples,labels,cv=cvSize)
+def naiveBayes10cv(examples,labels,cv):
+    predictedLabels = cross_val_predict(NBMODEL,examples,labels,cv=cv)
     return(metrics.accuracy_score(labels,predictedLabels),predictedLabels)
 
 def showResult(labels,accuracy):
@@ -90,7 +93,7 @@ def main(argv):
     model = naiveBayesTrain(dataN,labelsN)
     accuracy,predictedLabels = naiveBayesTest(model,dataN,labelsN)
     showResult(labels,accuracy)
-    accuracy,predictedLabels = naiveBayes10cv(dataN,labelsN,CVSIZE)
+    accuracy,predictedLabels = naiveBayes10cv(dataN,labelsN,CV)
     showResult(labels,accuracy)
     print(metrics.confusion_matrix(labelsN,predictedLabels))
     sys.exit(0)
