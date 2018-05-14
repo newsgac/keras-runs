@@ -16,15 +16,27 @@ from keras.datasets import reuters
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation
 from keras.preprocessing.text import Tokenizer
+from sklearn import metrics
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfTransformer
+from sklearn.model_selection import cross_val_predict
+from sklearn.model_selection import KFold
 
 COMMAND = sys.argv[0]
 USAGE = "usage: "+COMMAND+" -T trainFile [ -t testFile ]"
+RANDOMSTATE = 42
 FOLDS = 10
+CV = KFold(n_splits=FOLDS,shuffle=True,random_state=RANDOMSTATE)
 MAXWORDS = 10000
 BATCHSIZE = 32
 EPOCHS = 5
 VERBOSE = 0
 VALIDATIONSPLIT = 0.1
+ANALYZER = "word"
+MINDF = 0.01
+MAXDF = 0.5
+NGRAMMIN = 1
+NGRAMMAX = 1
 
 def makeNumeric(listIn):
     myDict = {}
@@ -52,6 +64,7 @@ def makeNumeric(listIn):
                 else:
                    lastElement += 1
                    myDict[listIn[i]] = lastElement
+                   print(str(1+lastElement)+": "+listIn[i])
             listOut.append(myDict[listIn[i]])
     return(listOut)
 
@@ -67,22 +80,6 @@ def readData(inFileName):
         classes.append(c)
     inFile.close()
     return({"text":text, "classes":classes})
-
-def predict(xTest,yTest):
-    predictions = model.predict(xTest,batch_size=BATCHSIZE,verbose=VERBOSE)
-    for i in range(0,TESTSIZE):
-        maxGold = 0.0
-        maxGoldId = -1
-        maxGuess = 0.0
-        maxGuessId = -1
-        for j in range(0,len(predictions[i])):
-            if predictions[i][j] > maxGuess:
-                maxGuess = predictions[i][j]
-                maxGuessId = j
-            if yTest[i][j] > maxGold:
-                maxGold = yTest[i][j]
-                maxGoldId = j
-        print(str(maxGoldId)+" "+str(maxGuessId))
 
 def runExperiment(xTrain,yTrain,xTest,yTest):
     numClasses = np.max(yTrain) + 1
@@ -105,15 +102,15 @@ def runExperiment(xTrain,yTrain,xTest,yTest):
                         epochs=EPOCHS,
                         verbose=VERBOSE,
                         validation_split=VALIDATIONSPLIT)
-    score = model.evaluate(xTest, yTest,
-                           batch_size=BATCHSIZE, verbose=VERBOSE)
-    p = model.predict(xTest,batch_size=BATCHSIZE,verbose=VERBOSE)
-    for i in range(0,len(p)):
+    predictions = model.predict(xTest,batch_size=BATCHSIZE,verbose=VERBOSE)
+    labelsN = []
+    predictionsN = []
+    for i in range(0,len(predictions)):
         maxJ = -1
         maxP = 0
-        for j in range(0,len(p[i])):
-            if p[i][j] > maxP:
-                maxP = p[i][j]
+        for j in range(0,len(predictions[i])):
+            if predictions[i][j] > maxP:
+                maxP = predictions[i][j]
                 maxJ = j
         maxYJ = -1
         maxY = 0
@@ -121,15 +118,19 @@ def runExperiment(xTrain,yTrain,xTest,yTest):
             if yTest[i][j] > maxY:
                 maxY = yTest[i][j]
                 maxYJ = j
-        print(str(maxYJ)+" "+str(maxJ))
-    return(score[1])
+        labelsN.append(maxJ)
+        predictionsN.append(maxYJ)
+    score = metrics.accuracy_score(labelsN,predictionsN)
+    return(score,labelsN,predictionsN)
 
 def singleRun(trainText,trainClasses,testText,testClasses):
-    score = runExperiment(np.array(trainText),np.array(trainClasses),np.array(testText),np.array(testClasses))
-    return(score)
+    score, labelsN, predictionsN = runExperiment(np.array(trainText),np.array(trainClasses),np.array(testText),np.array(testClasses))
+    return(score,labelsN,predictionsN)
 
 def run10cv(text,classes):
     results = []
+    labelsAll = []
+    predictionsAll = []
     for n in range(0,FOLDS):
         testStart = int(float(n)*float(len(text))/float(FOLDS))
         testEnd = int(float(n+1)*float(len(text))/float(FOLDS))
@@ -141,12 +142,14 @@ def run10cv(text,classes):
         yTrainList = classes[:testStart]
         yTrainList.extend(classes[testEnd:])
         yTrain = np.array(yTrainList)
-        score = runExperiment(xTrain,yTrain,xTest,yTest)
+        score,labelsN,predictionsN = runExperiment(xTrain,yTrain,xTest,yTest)
         results.append(score)
+        labelsAll.extend(labelsN)
+        predictionsAll.extend(predictionsN)
         print("Fold: "+str(n)+"; Score: "+str(score))
     total = 0.0
     for i in range(0,FOLDS): total += results[i]
-    return(total/float(FOLDS))
+    return(total/float(FOLDS),labelsAll,predictionsAll)
 
 def processOpts(argv):
     argv.pop(0)
@@ -160,6 +163,59 @@ def processOpts(argv):
     if trainFile == "": sys.exit(USAGE)
     return(trainFile,testFile)
 
+def makeNumericText(texts):
+    countsModel = CountVectorizer(
+                  analyzer=ANALYZER,
+                  max_df=MAXDF,
+                  min_df=MINDF,
+                  ngram_range=(NGRAMMIN,NGRAMMAX),
+                  tokenizer=tokenizer)
+    textCounts = countsModel.fit_transform(texts)
+    tfidfModel = TfidfTransformer()
+    textTfidf = tfidfModel.fit_transform(textCounts)
+    print(textTfidf.shape)
+    return(textTfidf,countsModel,tfidfModel)
+
+def makeNumericList(thisList):
+    cellNames = {}
+    thisListN = []
+    seen = 0
+    for i in range(0,len(thisList)):
+        if not thisList[i] in cellNames:
+            cellNames[thisList[i]] = seen
+            seen += 1
+        thisListN.append(cellNames[thisList[i]])
+    return(thisListN,cellNames)
+
+def tokenizer(text):
+    return(text.split())
+
+def flatten(thisList):
+    flatList = []
+    for i in range(0,len(thisList)):
+        thisMax = 0
+        maxIndex = -1
+        for j in range(0,len(thisList[i])):
+            if thisList[i][j] > thisMax:
+                maxIndex = j
+                thisMax = thisList[i][j]
+        flatList.append(maxIndex)
+    return(flatList)
+
+def sklearn10cv(text,labels):
+    numClasses = np.max(labels) + 1
+    model = Sequential()
+    model.add(Dense(512, input_shape=(MAXWORDS,)))
+    model.add(Activation('relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(numClasses))
+    model.add(Activation('softmax'))
+    model.compile(loss='categorical_crossentropy',
+                  optimizer='adam',
+                  metrics=['accuracy'])
+    predictions = cross_val_predict(model,text,labels,cv=CV)
+    return(metrics.accuracy_score(labels,predictedLabels),labels,predictions)
+
 def main(argv):
     trainFile, testFile = processOpts(argv)
     trainData = readData(trainFile)
@@ -168,7 +224,7 @@ def main(argv):
     if testFile == "":
         trainText = makeNumeric(trainText)
         trainClasses = makeNumeric(trainClasses)
-        averageScore = run10cv(trainText,trainClasses)
+        averageScore,labels,predictions = run10cv(trainText,trainClasses)
         print("Average: ",averageScore)
     else: 
         testData = readData(testFile)
@@ -182,8 +238,9 @@ def main(argv):
         numericData = makeNumeric(combinedList)
         testClasses = numericData[len(trainClasses):]
         trainClasses = numericData[:len(trainClasses)]
-        score = singleRun(trainText,trainClasses,testText,testClasses)
+        score,labels,predictions = singleRun(trainText,trainClasses,testText,testClasses)
         print("Score: ",score)
+    print(metrics.confusion_matrix(labels,predictions))
     return(0)
 
 if __name__ == "__main__":
