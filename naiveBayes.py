@@ -22,7 +22,7 @@ MINDF = 0.01
 MAXDF = 0.5
 NGRAMMIN = 1
 NGRAMMAX = 1
-NBMODEL = BernoulliNB()
+NBMODEL = MultinomialNB(alpha=0.1)
 
 def readData(dataFileName):
     data = []
@@ -84,6 +84,16 @@ def showResult(labels,accuracy):
     percentage = int(round(accuracy*100))
     print("correct:",str(correctCount),"of",str(nbrOfLabels),"("+str(percentage)+"%)")
 
+def showLabelNames(labelNames):
+    ids = {}
+    for label in labelNames:
+        if labelNames[label] in ids: 
+            sys.exit(COMMAND+": duplicate label id: "+labelNames[label])
+        ids[int(labelNames[label])] = label
+    for thisId in sorted(ids.keys()):
+        print(str(thisId+1)+": "+ids[thisId])
+    return()    
+
 def main(argv):
     try: dataFileName = sys.argv.pop(0)
     except: sys.exit(USAGE)
@@ -95,6 +105,7 @@ def main(argv):
     showResult(labels,accuracy)
     accuracy,predictedLabels = naiveBayes10cv(dataN,labelsN,CV)
     showResult(labels,accuracy)
+    showLabelNames(labelNames)
     print(metrics.confusion_matrix(labelsN,predictedLabels))
     sys.exit(0)
 
