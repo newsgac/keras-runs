@@ -66,7 +66,7 @@ def makeNumeric(listIn):
                    myDict[listIn[i]] = lastElement
                    print(str(1+lastElement)+": "+listIn[i])
             listOut.append(myDict[listIn[i]])
-    return(listOut)
+    return(listOut,myDict)
 
 def readData(inFileName):
     text = []
@@ -216,31 +216,42 @@ def sklearn10cv(text,labels):
     predictions = cross_val_predict(model,text,labels,cv=CV)
     return(metrics.accuracy_score(labels,predictedLabels),labels,predictions)
 
+def showLabelNames(labelNames):
+    ids = {}
+    for label in labelNames:
+        if labelNames[label] in ids:
+            sys.exit(COMMAND+": duplicate label id: "+labelNames[label])
+        ids[int(labelNames[label])] = label
+    for thisId in sorted(ids.keys()):
+        print(str(thisId+1)+": "+ids[thisId])
+    return()
+
 def main(argv):
     trainFile, testFile = processOpts(argv)
     trainData = readData(trainFile)
     trainText = trainData["text"]
     trainClasses = trainData["classes"]
     if testFile == "":
-        trainText = makeNumeric(trainText)
-        trainClasses = makeNumeric(trainClasses)
+        trainText,myDict = makeNumeric(trainText)
+        trainClasses,myDict = makeNumeric(trainClasses)
         averageScore,labels,predictions = run10cv(trainText,trainClasses)
         print("Average: ",averageScore)
     else: 
         testData = readData(testFile)
         combinedList = list(trainText)
         combinedList.extend(testData["text"])
-        numericData = makeNumeric(combinedList)
+        numericData,myDict = makeNumeric(combinedList)
         testText = numericData[len(trainText):]
         trainText = numericData[:len(trainText)]
         combinedList = list(trainClasses)
         combinedList.extend(testData["classes"])
-        numericData = makeNumeric(combinedList)
+        numericData,myDict = makeNumeric(combinedList)
         testClasses = numericData[len(trainClasses):]
         trainClasses = numericData[:len(trainClasses)]
         score,labels,predictions = singleRun(trainText,trainClasses,testText,testClasses)
         print("Score: ",score)
     print(metrics.confusion_matrix(labels,predictions))
+    showLabelNames(myDict)
     return(0)
 
 if __name__ == "__main__":
