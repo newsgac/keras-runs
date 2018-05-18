@@ -94,6 +94,16 @@ def showLabelNames(labelNames):
         print(str(thisId+1)+": "+ids[thisId])
     return()    
 
+# From: https://stackoverflow.com/questions/11116697/
+# how-to-get-most-informative-features-for-scikit-learn-classifiers#11116960
+def show_most_informative_features(vectorizer, clf, n=20):
+    feature_names = vectorizer.get_feature_names()
+    coefs_with_fns = sorted(zip(clf.coef_[0], feature_names))
+    # top = zip(coefs_with_fns[:n], coefs_with_fns[:-(n + 1):-1])
+    top = coefs_with_fns[:-(n + 1):-1]
+    for (coef, fn) in top:
+        print("\t%.4f\t%-15s\t" % (coef, fn))
+
 def main(argv):
     try: dataFileName = sys.argv.pop(0)
     except: sys.exit(USAGE)
@@ -101,6 +111,8 @@ def main(argv):
     dataN,countsModel,tfidfModel = makeNumericText(data)
     labelsN,labelNames = makeNumericList(labels)
     model = naiveBayesTrain(dataN,labelsN)
+    show_most_informative_features(countsModel,model)
+    sys.exit(0)
     accuracy,predictedLabels = naiveBayesTest(model,dataN,labelsN)
     showResult(labels,accuracy)
     accuracy,predictedLabels = naiveBayes10cv(dataN,labelsN,CV)
