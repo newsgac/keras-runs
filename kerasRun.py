@@ -22,7 +22,7 @@ from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.model_selection import cross_val_predict
 from sklearn.model_selection import KFold
 
-COMMAND = sys.argv[0]
+COMMAND = sys.argv[0].split("/")[-1]
 USAGE = "usage: "+COMMAND+" -T trainFile [ -t testFile ]"
 RANDOMSTATE = 42
 FOLDS = 10
@@ -64,7 +64,6 @@ def makeNumeric(listIn):
                 else:
                    lastElement += 1
                    myDict[listIn[i]] = lastElement
-                   print(str(1+lastElement)+": "+listIn[i])
             listOut.append(myDict[listIn[i]])
     return(listOut,myDict)
 
@@ -81,7 +80,7 @@ def readData(inFileName):
     inFile.close()
     return({"text":text, "classes":classes})
 
-def runExperiment(xTrain,yTrain,xTest,yTest):
+def runExperiment(xTrain,yTrain,xTest,yTest,outFile):
     numClasses = np.max(yTrain) + 1
     tokenizer = Tokenizer(num_words=MAXWORDS)
     xTrain = tokenizer.sequences_to_matrix(xTrain, mode='binary')
@@ -120,14 +119,15 @@ def runExperiment(xTrain,yTrain,xTest,yTest):
                 maxYJ = j
         labelsN.append(maxJ)
         predictionsN.append(maxYJ)
+        print(maxYJ,maxJ,file=outFile)
     score = metrics.accuracy_score(labelsN,predictionsN)
     return(score,labelsN,predictionsN)
 
-def singleRun(trainText,trainClasses,testText,testClasses):
-    score, labelsN, predictionsN = runExperiment(np.array(trainText),np.array(trainClasses),np.array(testText),np.array(testClasses))
+def singleRun(trainText,trainClasses,testText,testClasses,outFile):
+    score, labelsN, predictionsN = runExperiment(np.array(trainText),np.array(trainClasses),np.array(testText),np.array(testClasses),outFile)
     return(score,labelsN,predictionsN)
 
-def run10cv(text,classes):
+def run10cv(text,classes,outFile):
     results = []
     labelsAll = []
     predictionsAll = []
@@ -142,11 +142,11 @@ def run10cv(text,classes):
         yTrainList = classes[:testStart]
         yTrainList.extend(classes[testEnd:])
         yTrain = np.array(yTrainList)
-        score,labelsN,predictionsN = runExperiment(xTrain,yTrain,xTest,yTest)
+        score,labelsN,predictionsN = runExperiment(xTrain,yTrain,xTest,yTest,outFile)
         results.append(score)
         labelsAll.extend(labelsN)
         predictionsAll.extend(predictionsN)
-        print("Fold: "+str(n)+"; Score: "+str(score))
+        print("Fold: "+str(n)+"; Score: "+str(score),file=sys.stderr)
     total = 0.0
     for i in range(0,FOLDS): total += results[i]
     return(total/float(FOLDS),labelsAll,predictionsAll)
@@ -220,24 +220,31 @@ def showLabelNames(labelNames):
     ids = {}
     for label in labelNames:
         if labelNames[label] in ids:
-            sys.exit(COMMAND+": duplicate label id: "+labelNames[label])
+            sys.exit(COMMAND+": duplicate label id: "+str(labelNames[label]))
         ids[int(labelNames[label])] = label
     for thisId in sorted(ids.keys()):
-        print(str(thisId+1)+": "+ids[thisId])
+        print(str(thisId)+": "+ids[thisId],file=sys.stderr)
     return()
 
+def makeOutFileName(fileName):
+    return(fileName+"."+COMMAND+".out")
+
 def main(argv):
-    trainFile, testFile = processOpts(argv)
-    trainData = readData(trainFile)
+    trainFileName, testFileName = processOpts(argv)
+    trainData = readData(trainFileName)
     trainText = trainData["text"]
     trainClasses = trainData["classes"]
-    if testFile == "":
+    outFileName = makeOutFileName(trainFileName)
+    try: outFile = open(outFileName,"w")
+    except: sys.exit(COMMAND+": cannot write file "+outFileName)
+    if testFileName == "":
         trainText,myDict = makeNumeric(trainText)
         trainClasses,myDict = makeNumeric(trainClasses)
-        averageScore,labels,predictions = run10cv(trainText,trainClasses)
+        showLabelNames(myDict)
+        averageScore,labels,predictions = run10cv(trainText,trainClasses,outFile)
         print("Average: ",averageScore)
     else: 
-        testData = readData(testFile)
+        testData = readData(testFileName)
         combinedList = list(trainText)
         combinedList.extend(testData["text"])
         numericData,myDict = makeNumeric(combinedList)
@@ -246,12 +253,13 @@ def main(argv):
         combinedList = list(trainClasses)
         combinedList.extend(testData["classes"])
         numericData,myDict = makeNumeric(combinedList)
+        showLabelNames(myDict)
         testClasses = numericData[len(trainClasses):]
         trainClasses = numericData[:len(trainClasses)]
-        score,labels,predictions = singleRun(trainText,trainClasses,testText,testClasses)
-        print("Score: ",score)
-    print(metrics.confusion_matrix(labels,predictions))
-    showLabelNames(myDict)
+        score,labels,predictions = singleRun(trainText,trainClasses,testText,testClasses,outFile)
+        print("Score: ",score,file=sys.stderr)
+    outFile.close()
+    print(metrics.confusion_matrix(labels,predictions),file=sys.stderr)
     return(0)
 
 if __name__ == "__main__":
