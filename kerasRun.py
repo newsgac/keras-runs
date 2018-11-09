@@ -29,9 +29,9 @@ FOLDS = 10
 CV = KFold(n_splits=FOLDS,shuffle=True,random_state=RANDOMSTATE)
 MAXWORDS = 10000
 BATCHSIZE = 32
-EPOCHS = 5
-VERBOSE = 0
-VALIDATIONSPLIT = 0.1
+EPOCHS = 10
+VERBOSE = 1
+VALIDATIONSPLIT = 0.5
 ANALYZER = "word"
 MINDF = 0.01
 MAXDF = 0.5
@@ -88,7 +88,7 @@ def runExperiment(xTrain,yTrain,xTest,yTest,outFile):
     yTrain = keras.utils.to_categorical(yTrain, numClasses)
     yTest = keras.utils.to_categorical(yTest, numClasses)
     model = Sequential()
-    model.add(Dense(512, input_shape=(MAXWORDS,)))
+    model.add(Dense(2048, input_shape=(MAXWORDS,)))
     model.add(Activation('relu'))
     model.add(Dropout(0.5))
     model.add(Dense(numClasses))
