@@ -9,6 +9,7 @@
 
 import getopt
 import keras
+import nltk
 import numpy as np
 import re
 import sys
@@ -25,16 +26,16 @@ from sklearn.model_selection import KFold
 COMMAND = sys.argv[0].split("/")[-1]
 USAGE = "usage: "+COMMAND+" -T trainFile [ -t testFile ]"
 RANDOMSTATE = 42
-FOLDS = 10
+FOLDS = 9
 CV = KFold(n_splits=FOLDS,shuffle=True,random_state=RANDOMSTATE)
 MAXWORDS = 10000
 BATCHSIZE = 32
-EPOCHS = 10
+EPOCHS = 20
 VERBOSE = 1
 VALIDATIONSPLIT = 0.5
 ANALYZER = "word"
-MINDF = 0.01
-MAXDF = 0.5
+MINDF = 0.0 # 0.01
+MAXDF = 1.0 # 0.5
 NGRAMMIN = 1
 NGRAMMAX = 1
 
@@ -80,6 +81,17 @@ def readData(inFileName):
     inFile.close()
     return({"text":text, "classes":classes})
 
+# generates error message
+def metricF1(yTrue,yPred):
+    session = keras.backend.get_session()
+    keras.backend.set_session(session)
+    correct = 0.0
+    yTrueValues = keras.backend.get_value(yTrue)
+    yPredValues = keras.backend.get_value(yPred)
+    for i in range(0,len(yPredValues)): 
+        if yPredValues[i] == yTrueValues[i]: correct += 1.0
+    return(keras.backend.variable(value=correct/len(yPred)))
+
 def runExperiment(xTrain,yTrain,xTest,yTest,outFile):
     numClasses = np.max(yTrain) + 1
     tokenizer = Tokenizer(num_words=MAXWORDS)
@@ -88,8 +100,10 @@ def runExperiment(xTrain,yTrain,xTest,yTest,outFile):
     yTrain = keras.utils.to_categorical(yTrain, numClasses)
     yTest = keras.utils.to_categorical(yTest, numClasses)
     model = Sequential()
-    model.add(Dense(2048, input_shape=(MAXWORDS,)))
+    model.add(Dense(512, input_shape=(MAXWORDS,)))
     model.add(Activation('relu'))
+    model.add(Dense(64))
+    model.add(Activation('sigmoid'))
     model.add(Dropout(0.5))
     model.add(Dense(numClasses))
     model.add(Activation('softmax'))
@@ -243,15 +257,17 @@ def main(argv):
         showLabelNames(myDict)
         averageScore,labels,predictions = run10cv(trainText,trainClasses,outFile)
         print("Average: ",averageScore)
-    else: 
+    else:
         testData = readData(testFileName)
+        testText = testData["text"]
+        testClasses = testData["classes"]
         combinedList = list(trainText)
-        combinedList.extend(testData["text"])
+        combinedList.extend(testText)
         numericData,myDict = makeNumeric(combinedList)
         testText = numericData[len(trainText):]
         trainText = numericData[:len(trainText)]
         combinedList = list(trainClasses)
-        combinedList.extend(testData["classes"])
+        combinedList.extend(testClasses)
         numericData,myDict = makeNumeric(combinedList)
         showLabelNames(myDict)
         testClasses = numericData[len(trainClasses):]
