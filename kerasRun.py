@@ -28,9 +28,9 @@ USAGE = "usage: "+COMMAND+" -T trainFile [ -t testFile ]"
 RANDOMSTATE = 42
 FOLDS = 9
 CV = KFold(n_splits=FOLDS,shuffle=True,random_state=RANDOMSTATE)
-MAXWORDS = 10000
-BATCHSIZE = 32
-EPOCHS = 20
+MAXWORDS = 20000
+BATCHSIZE = 196 # was 32
+EPOCHS = 5
 VERBOSE = 1
 VALIDATIONSPLIT = 0.5
 ANALYZER = "word"
@@ -38,6 +38,9 @@ MINDF = 0.0 # 0.01
 MAXDF = 1.0 # 0.5
 NGRAMMIN = 1
 NGRAMMAX = 1
+ALPHA=0.7156057222775337
+HIDDENLAYER1 = 100
+HIDDENLAYER2 = 200
 
 def makeNumeric(listIn):
     myDict = {}
@@ -76,6 +79,8 @@ def readData(inFileName):
     for line in inFile:
         fields = line.split()
         c = fields.pop(0)
+        if len(fields) > 0 and re.search(r"DATE=",fields[0]):
+            date = fields.pop(0)
         text.append(fields)
         classes.append(c)
     inFile.close()
@@ -100,9 +105,9 @@ def runExperiment(xTrain,yTrain,xTest,yTest,outFile):
     yTrain = keras.utils.to_categorical(yTrain, numClasses)
     yTest = keras.utils.to_categorical(yTest, numClasses)
     model = Sequential()
-    model.add(Dense(512, input_shape=(MAXWORDS,)))
+    model.add(Dense(HIDDENLAYER1, input_shape=(MAXWORDS,)))
     model.add(Activation('relu'))
-    model.add(Dense(64))
+    model.add(Dense(HIDDENLAYER2))
     model.add(Activation('sigmoid'))
     model.add(Dropout(0.5))
     model.add(Dense(numClasses))
